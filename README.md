@@ -2,6 +2,10 @@
 
 AI Library (AI Bookshelf) - upload a PDF "book", chat about it, and organize your chats on a visual shelf. Built with Next.js App Router, Supabase Auth/Storage, Tailwind, and shadcn/ui.
 
+<img width="581" height="276" alt="Frontend Pic 1" src="https://github.com/user-attachments/assets/507bf4eb-e6b0-4243-a00c-81df93d8ad72" />
+
+<img width="581" height="274" alt="Frontend Pic 2" src="https://github.com/user-attachments/assets/bfb268d4-656f-45b3-8545-d5717962027d" />
+
 ## Problem
 
 Users need a simple way to ask questions about their own documents and keep conversations organized. Most tooling is either too complex or doesn't prioritize an intuitive, bookshelf-like UI for per-document chats.
