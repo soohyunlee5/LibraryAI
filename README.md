@@ -1,109 +1,159 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# README
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+AI Library (AI Bookshelf) - upload a PDF "book", chat about it, and organize your chats on a visual shelf. Built with Next.js App Router, Supabase Auth/Storage, Tailwind, and shadcn/ui.
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+## Problem
 
-## Features
+Users need a simple way to ask questions about their own documents and keep conversations organized. Most tooling is either too complex or doesn't prioritize an intuitive, bookshelf-like UI for per-document chats.
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Middleware
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+## MVP scope
 
-## Demo
+- Auth: email/password via Supabase (cookie-based with `@supabase/ssr`).
+- Create chat by uploading a PDF (max 50 MB) to the `books` bucket.
+- Bookshelf: list chats, ordered by `position`/`created_at` with drag/sort behavior.
+- Chat: send a message and get a mock assistant reply grounded in the file metadata (demo only).
+- Rename chat (title and optional author), delete chat (removes storage file if present).
+- View full message history per chat.
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+## Frontend
 
-## Deploy to Vercel
+- Framework and routing
+  - Next.js App Router in `app/` with a mix of Server and Client Components.
+  - Global styles in `app/globals.css`; Tailwind configured via `tailwind.config.ts` and `postcss.config.mjs`.
+- Top-level views
+  - `app/page.tsx` renders `app/components/App.tsx`, which composes `Header` and `Bookshelf`.
+  - `app/chat/[id]/page.tsx` renders the chat view for a given `chatId`, passing it (and optional `ids` list) to `ChatUI`.
+- Header and auth UX
+  - `app/components/Header.tsx` (Server Component) uses `lib/supabase/server.ts` to read the user and switch between Log In/Sign Up links and `UserMenu`.
+  - Login: `app/login/page.tsx` + `app/login/LogInForm.tsx` with Supabase client auth.
+  - Signup: `app/signup/page.tsx` + `app/signup/SignUpForm.tsx` (includes simple confirmation flow).
+- Bookshelf UI
+  - `app/components/Bookshelf.tsx` (Client) loads chats (`GET /api/v1/chats`), uploads PDFs (`POST /api/v1/createChat`), saves metadata (`PATCH /api/v1/chats/:id`), deletes chats (`DELETE /api/v1/chats/:id`), and persists order (`PATCH /api/v1/chats/order`).
+  - Custom drag-and-drop: creates a ghost element on drag, tracks the cursor offset, and animates reordering using first/last DOM rects.
+  - `app/components/AddBookButton.tsx`: Hidden file input trigger with busy/disabled state.
+  - `app/components/BookSpine.tsx`: Single row item with select/delete and DnD handlers.
+  - `app/components/MetadataForm.tsx`: Modal to set `title` and optional `author` after upload.
+- Chat UI
+  - `app/components/ChatUI.tsx`: Loads history (`GET /api/v1/getHistory/:id`), sends messages (`POST /api/v1/updateChat/:id`), auto-resizes textarea, and renders user/assistant bubbles.
 
-Vercel deployment will guide you through creating a Supabase account and project.
+## Backend
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+- Auth/session middleware
+  - `middleware.ts` calls `lib/supabase/middleware.ts:updateSession` to synchronize Supabase sessions via cookies and redirect unauthenticated users away from protected pages.
+  - Supabase helpers: `lib/supabase/server.ts` (server-side client with cookies) and `lib/supabase/client.ts` (browser client).
+- Data model and security
+  - See `SUPABASE_SCHEMA.md` for `chats` and `messages` tables, helpful indexes, and RLS policies limiting access to a user's own data.
+  - Files upload to Storage bucket `books` at `{user_id}/{chat_id}.pdf` with policies restricting access to the owner prefix.
+- API routes (`app/api/v1/...`)
+  - `chats/route.ts` (GET): List chats for the signed-in user, ordered by `position` then `created_at`.
+  - `createChat/route.ts` (POST): Validate PDF (type/size), create a chat row to get an id, upload to Storage, set `file_path`, and seed a welcome assistant message.
+  - `getHistory/[id]/route.ts` (GET): Return chat metadata and ordered message history.
+  - `updateChat/[id]/route.ts` (POST): Insert the user message; generate a mock assistant response (see 'Haiku detection' below) and persist it.
+  - `chats/[id]/route.ts` (PATCH/DELETE): Update title/author or delete the chat and attempt to remove the Storage object.
+  - `chats/order/route.ts` (PATCH): Validate unique ids, verify ownership, and assign new `position` values in order.
+- Haiku detection: sliding window + greedy
+  - Location: `app/api/v1/updateChat/[id]/route.ts` in `isHaikuFlexible(message: string)` with helper `countSyllables(word: string)`.
+  - Exact 3-line path: If the user types exactly three lines, the function counts syllables per line and requires 5-7-5 exactly.
+  - Flexible single-line path: Otherwise, it treats the entire message as a stream of words and greedily builds three segments with targets `[5,7,5]`.
+    - Sliding window: Iterate words once, maintaining a running syllable sum for the current segment (the right pointer advances with each word). When the sum meets the current target, close that segment and advance to the next target. If the sum exceeds the target at any point, fail early.
+    - Greedy choice: Always accept the earliest boundary where the sum equals the target before moving on. This single pass with early exit is optimal for the 5-7-5 constraint and avoids backtracking.
+  - Syllables: `countSyllables` lowercases and strips non-letters, counts transitions into vowel groups, and ensures a minimum of 1 per word.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+## AI Layer
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+- Current MVP: The "assistant" response is a mock template grounded in the uploaded file's metadata (e.g., file name/size) and optionally appends a haiku note if detection passes.
+- Future direction (examples):
+  - Replace mock reply with an LLM call and retrieval-augmented generation (RAG) over chunked PDF embeddings.
+  - Store embeddings and chunk metadata alongside `chats`, secure by user id. Use Supabase functions or edge workers for inference orchestration.
+  - Stream tokens to the client for a live chat feel.
+  
+## API
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+All endpoints require an authenticated Supabase user (cookies). Response codes reflect success/errors as shown.
 
-## Clone and run locally
+- GET `/api/v1/chats`
+  - Returns: `[{ id, name, author, created_at, file_name, file_size, position }]`
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+- POST `/api/v1/createChat` (multipart/form-data)
+  - Fields: `file` (PDF), `name` (string, optional)
+  - Returns: `{ id }`
 
-2. Create a Next.js app using the Supabase Starter template npx command
+- GET `/api/v1/getHistory/:id`
+  - Returns: `{ chat, history: [{ id, role, content, created_at }] }`
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+- POST `/api/v1/updateChat/:id`
+  - Body: `{ message: string, docIds?: string[] }`
+  - Returns: `{ assistant: { id, role, content, created_at } }` (mock reply)
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+- PATCH `/api/v1/chats/:id`
+  - Body: `{ title: string, author?: string | null }`
+  - Returns: `{ chat }` (or `{ chat, warning }` if only title saved)
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+- DELETE `/api/v1/chats/:id`
+  - Returns: `204 No Content` (also attempts to remove the stored PDF)
 
-3. Use `cd` to change into the app's directory
+- PATCH `/api/v1/chats/order`
+  - Body: `{ ids: string[] }` (new shelf order)
+  - Returns: `204 No Content`
 
-   ```bash
-   cd with-supabase-app
-   ```
+Refer to `SUPABASE_SCHEMA.md` for the database and storage schema used by these routes.
 
-4. Rename `.env.example` to `.env.local` and update the following:
+## Setup
 
-  ```env
-  NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API PUBLISHABLE OR ANON KEY]
-  ```
-  > [!NOTE]
-  > This example uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which refers to Supabase's new **publishable** key format.
-  > Both legacy **anon** keys and new **publishable** keys can be used with this variable name during the transition period. Supabase's dashboard may show `NEXT_PUBLIC_SUPABASE_ANON_KEY`; its value can be used in this example.
-  > See the [full announcement](https://github.com/orgs/supabase/discussions/29260) for more information.
+Prerequisites: Node.js 18+, npm.
 
-  Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
+1) Create a Supabase project and a Storage bucket named `books` (private).
 
-5. You can now run the Next.js local development server:
+2) In Supabase SQL Editor, run the SQL from `SUPABASE_SCHEMA.md` to create tables, indexes, RLS, and storage policies.
 
-   ```bash
-   npm run dev
-   ```
+3) Create `/.env.local` with your project values:
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+```
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-or-anon-key
+```
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+4) Install and run locally:
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+```
+npm install
+npm run dev
+```
 
-## Feedback and issues
+Open http://localhost:3000, sign up, and you'll be redirected by middleware when needed.
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
+Notes:
+- UI uses Tailwind + shadcn/ui. If you want different shadcn styles, adjust `components.json` and re-install per shadcn docs.
+- Auth is cookie-based via `@supabase/ssr`; the Next.js middleware enforces redirects for unauthenticated routes.
 
-## More Supabase examples
+## Demo script
 
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+Use this script to demonstrate the MVP flow:
+
+1) Sign up / log in.
+2) Click "Add Book" and upload a PDF (<= 50 MB). Name the chat.
+3) Observe a welcome message seeded for the new chat.
+4) Ask a question about the PDF; see the mock assistant reply referencing the file metadata. Try a 5-7-5 haiku to trigger the easter egg.
+5) Rename the chat title and (optionally) set an author; confirm it persists.
+6) Reorder items on the shelf (drag or via UI action) and confirm the new order persists.
+7) Delete a chat and confirm it disappears and its storage file is removed.
+
+## Work in progress
+
+Deploying to Vercel.
+
+- Create a new Vercel project from this repo.
+- Link your Supabase project using the Supabase Vercel Integration (recommended) to auto-inject env vars, or set these variables manually in Vercel Project Settings -> Environment Variables:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- In your production Supabase project, create the `books` bucket and run the SQL in `SUPABASE_SCHEMA.md` (or your migration of it).
+- Trigger a deploy; verify protected routes redirect correctly and that uploads/listing work in production.
+
+## Contributing
+
+See `CONTRIBUTING.md` for a quick guide. In short: fork -> branch -> PR, run `npm run lint` before pushing, and keep changes focused.
+
+## License
+
+MIT (c) 2025 AI Library contributors. See `LICENSE` for details.
+
