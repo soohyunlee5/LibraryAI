@@ -1,9 +1,10 @@
 # README
 
-LibraryAI turns scattered lecture PDFs, research papers, and work documents into an organized, AI supported visual shelf.
+Welcome to LibraryAI! 
+Let's turns your scattered lecture PDFs, research papers, and work documents into an organized, AI powered bookshelf.
 Upload, explore, and keep context across your entire library.
-_
-Built with Next.js App Router, Supabase Auth and Storage, Tailwind, and shadcn/ui._
+
+Built with Next.js App Router, Supabase Auth and Storage, Tailwind, TypeScriptt, CSS, React shadcn/ui and more!
 
 <img width="1920" height="1080" alt="Frontend Pic 1" src="https://github.com/user-attachments/assets/507bf4eb-e6b0-4243-a00c-81df93d8ad72" />
 
