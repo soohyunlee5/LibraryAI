@@ -1,7 +1,5 @@
 "use client";
 import { useEffect, useState, useRef, FormEvent, ChangeEvent } from "react";
-import Link from "next/link";
-import { styleText } from "util";
 
 type ChatMessage = {
     id: string,
@@ -11,10 +9,9 @@ type ChatMessage = {
 
 type ChatUIProps = {
     chatId: string,
-    docIds: string[]
 }
 
-export default function ChatUI({ chatId, docIds }: ChatUIProps) {
+export default function ChatUI({ chatId }: ChatUIProps) {
     const [sending, setSending] = useState(false);
     const [text, setText] = useState("");
     const [multiLine, setMultiLine] = useState(false);
@@ -104,7 +101,7 @@ export default function ChatUI({ chatId, docIds }: ChatUIProps) {
             const res = await fetch(`/api/v1/updateChat/${chatId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: trimmed, docIds })
+                body: JSON.stringify({ message: trimmed })
             });
             if (!res.ok) {
                 const message = await res.text();
@@ -140,13 +137,13 @@ export default function ChatUI({ chatId, docIds }: ChatUIProps) {
                                 {message.role === "user" ? (
                                     <div className="flex justify-end">
                                         <p className="max-w-2xl whitespace-pre-wrap break-words border rounded-2xl rounded-tr-none bg-slate-100 p-3">
-                                            "You": {message.content}
+                                            {message.content}
                                         </p>
                                     </div>
                                 ) : (
                                     <div>
-                                        <p className="max-w-5xl whitespace-prewrap break-words m-10">
-                                            "Assistant": {message.content}
+                                        <p className="max-w-5xl whitespace-pre-wrap break-words m-10">
+                                            {message.content}
                                         </p>
                                     </div>
                                 )}

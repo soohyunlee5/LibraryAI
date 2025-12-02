@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -10,38 +11,62 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const body = await request.json().catch(() => ({}));
   const message = String(body.message || "").trim();
-  const docIdsRaw = body.docIds;
-  if (docIdsRaw !== undefined && !Array.isArray(docIdsRaw)) {
-    return new Response("docIds must be an array of strings", { status: 400 });
-  }
-  const docIds = Array.isArray(docIdsRaw)
-    ? docIdsRaw.map((value) => String(value || "").trim()).filter(Boolean)
-    : undefined;
   if (!message) return new Response("message is required", { status: 400 });
 
   // Ensure chat belongs to user
   const { data: chat } = await supabase
     .from("chats")
-    .select("id,name,file_name,file_size")
+    .select("id,name,file_name,file_size,file_path")
     .eq("id", id)
     .eq("user_id", auth.user.id)
     .single();
-  if (!chat) return new Response("Not found", { status: 404 });
+  if (!chat) { return new Response("Not found", { status: 404 }) };
+
+  const admin = createAdminClient();
+  const { data: signed, error: signErr } = await admin.storage.from("books").createSignedUrl(chat.file_path, 60 * 60);
+  if (signErr || !signed?.signedUrl) return new Response("Could not sign URL", { status: 500 });
 
   // Insert user message
   await supabase.from("messages").insert({ chat_id: chat.id, role: "user", content: message });
 
-  // Dummy assistant reply
-  let replyContent = `You asked: "${message}"\n\nThis is a mock response grounded in your uploaded file \"${chat.file_name}\" (size ${(chat.file_size/1024).toFixed(1)} KB).`;
+  const llmRes = await fetch("https://iampratham29-AI-bookshelf-rag.hf.space/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      query: message, 
+      fileUrl: signed?.signedUrl,
+      filePath: chat.file_path })
+  });
+
+  if (!llmRes.ok) {
+    const errText = await llmRes.text();
+    throw new Error(errText || "LLM request failed");
+  }
+
+  const contentType = llmRes.headers.get("content-type") || "";
+  const raw = await llmRes.text();
+  let replyContent = raw;
+  
+  if (contentType.includes("application/json")) {
+    try {
+      const data = JSON.parse(raw);
+      replyContent =
+        typeof data === "string" ? data : data.answer || data.response || JSON.stringify(data);
+    } catch {
+      replyContent = raw;
+    }
+  }
+
   if (isHaikuFlexible(message)) {
     replyContent += `\n\nBeautiful haiku detected, perfectly structured in the 5-7-5 form.`;
   }
-  const { data: inserted, error } = await supabase
+
+  const { data: inserted, error: chatErr } = await supabase
     .from("messages")
     .insert({ chat_id: chat.id, role: "assistant", content: replyContent })
     .select("id,role,content,created_at")
     .single();
-  if (error) return new Response(error.message, { status: 500 });
+  if (chatErr) return new Response(chatErr.message, { status: 500 });
 
   return Response.json({ assistant: inserted });
 }

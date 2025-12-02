@@ -152,7 +152,19 @@ export default function Bookshelf() {
                 setPendingBook({
                     id,
                     fileName: file.name
-                })
+                });
+
+                try {
+                    const llmRes = await fetch(`/api/v1/uploadToLlm/${id}`, { method: "POST" });
+                    if (!llmRes.ok) {
+                        const message = await llmRes.text();
+                        console.error("LLM upload failed:", message);
+                        alert("Book saved, but sending to LLM failed. Please try again.");
+                    }
+                } catch (err) {
+                    console.error("LLM upload error:", err);
+                    alert("Book saved, but sending to LLM failed. Please try again.");
+                }
             }
 
         } catch (error) {
