@@ -19,7 +19,7 @@ Users need a simple way to ask questions about their own documents and keep conv
 <img width="1791" height="706" alt="image" src="https://github.com/user-attachments/assets/478db970-dc83-48b3-ad35-e99513ce0b91" />
 
 ## Frontend UI Sketch 
-<img width="1024" height="768" alt="Frontend Sketch" src="https://github.com/user-attachments/assets/fb52fd88-9e33-4cb1-9f44-7419fc833b04" />
+<img width="1024" height="768" alt="Frontend Sketch" src="https://github.com/user-attachments/assets/adb4a5a3-776c-418c-bd9c-0d40b5957679" />
 
 ## Frontend Codebase
 
