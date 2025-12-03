@@ -4,7 +4,7 @@ Welcome to LibraryAI!
 Let's turns your scattered lecture PDFs, research papers, and work documents into an organized, AI powered bookshelf.
 Upload, explore, and keep context across your entire library.
 
-Built with Next.js App Router, Supabase Auth and Storage, Tailwind, TypeScriptt, CSS, React and more!
+Built with Next.js App Router, Supabase Auth and Storage, Tailwind, TypeScript, CSS, React and more!
 
 <img width="1920" height="1080" alt="Frontend Pic 1" src="https://github.com/user-attachments/assets/507bf4eb-e6b0-4243-a00c-81df93d8ad72" />
 
