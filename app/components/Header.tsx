@@ -9,7 +9,7 @@ export default async function Header() {
     return (
         <header className="flex justify-between py-5 px-5 items-center border-b border-black">
             <h1 className="font-bold text-[1.875rem]">
-                <Link href="/">AI Bookshelf</Link>
+                <Link href="/">LibraryAI</Link>
             </h1>
             <nav>
                 {!currentUser.data.user ? 

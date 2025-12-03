@@ -9,7 +9,7 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "AI Bookshelf",
+  title: "LibraryAI",
   description: "Chat with your PDFs — demo app",
 };
 
