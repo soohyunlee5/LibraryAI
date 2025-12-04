@@ -90,7 +90,7 @@ function countSyllables(word: string): number {
 }
 
 function isHaikuFlexible(message: string): boolean {
-  // If user manually added 3 lines, use strict line checks
+  // Strict mode: user provided exactly 3 lines => enforce fixed 5-7-5 syllables
   const manualLines = message.trim().split(/\n+/);
   if (manualLines.length === 3) {
     const [a, b, c] = manualLines;
@@ -101,26 +101,34 @@ function isHaikuFlexible(message: string): boolean {
     );
   }
 
-  // Otherwise, treat entire message as a stream of words
+  // Flexible mode: treat the whole text as a continuous stream of words
   const words = message.trim().split(/\s+/);
   if (words.length < 3) return false;
 
-  const targets = [5, 7, 5];
-  let targetIndex = 0;
-  let syllableSum = 0;
+  const targets = [5, 7, 5];  // syllable goals for each haiku line
+  let targetIndex = 0;        // which line target we're currently filling
+  let syllableSum = 0;        // sliding window syllable accumulator
 
   for (const w of words) {
+    // Greedy step: always add each word's syllables to the current window.
     syllableSum += countSyllables(w);
 
+    // Sliding window idea:
+    // - The window expands as we add syllables.
+    // - If it hits the exact target, we "close" the window => move to the next line.
     if (syllableSum === targets[targetIndex]) {
-      targetIndex++;
-      syllableSum = 0;
+      targetIndex++;      // => next haiku segment
+      syllableSum = 0;    // => reset window for next segment
 
-      if (targetIndex === 3) return true; // matched 5-7-5
+      // All 3 segments (5-7-5) matched
+      if (targetIndex === 3) return true;
     }
 
+    // If the window exceeds the target, greedy strategy rejects the structure:
+    //      => once you overshoot, there's no way to fix the line break.
     if (syllableSum > targets[targetIndex]) return false;
   }
 
+  // If we end without matching all segments exactly => not a haiku
   return false;
 }
